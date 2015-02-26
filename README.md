@@ -3,7 +3,6 @@ Code generator that can be used to generate java interfaces from a Hydra-based J
 
 ## Getting Started
 
-- Install Python3
-- `pip3 install PyLD`
-- `chmod +x hydra2java.py jsonld_expand.py`
-- To test: `curl http://www.markus-lanthaler.com/hydra/api-demo/vocab | ./jsonld_expand.py | ./hydra2java.py`
+- `$ easy_install PyLD rdflib rdflib-jsonld rdfextras`
+- `$ chmod +x hydra2java-rdf.py`
+- To test: `$ curl http://www.markus-lanthaler.com/hydra/api-demo/vocab | ./hydra2java-rdf.py`
