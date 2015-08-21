@@ -91,14 +91,15 @@ def generate_class(g, c, package, type_label, f, no_annotations):
 			prop_type = 'java.util.List<' + prop_type + '>'
 		read_only = Literal(True).eq(g.value(sp, HYDRA.readonly))
 		write_only = Literal(True).eq(g.value(sp, HYDRA.writeonly))
-		if g.value(p, RDF.type, None) == HYDRA.Link:
+		ptype = g.value(p, RDF.type, None)
+		if ptype in [HYDRA.Link, HYDRA.TemplatedLink]:
 			operations = list(g.objects(p, HYDRA.supportedOperation))
 			generate_methods(g, prop_label, prop_type, operations,
-				[ prop_label + '/' + str(o) for o in operations ], type_label, f, no_annotations)
+				[ prop_label + '/' + str(o) for o in operations ], type_label, f, no_annotations, ptype)
 		else:
 			generate_property(prop_label, prop_type, read_only, write_only, type_label, f)
 	operations = list(g.objects(c, HYDRA.supportedOperation))
-	generate_methods(g, cl, cl, operations, [ str(o) for o in operations ], type_label, f, no_annotations)
+	generate_methods(g, cl, cl, operations, [ str(o) for o in operations ], type_label, f, no_annotations, HYDRA.Link)
 	f.write('}\n')
 
 def replace_prefix(prefix_mapping, uri):
@@ -117,13 +118,17 @@ def replace_prefix(prefix_mapping, uri):
 				result = result.rpartition('/')[2]
 	return result
 
-def generate_methods(g, label, class_type, operations, paths, type_label, f, no_annotations):
+def generate_methods(g, label, class_type, operations, paths, type_label, f, no_annotations, ptype):
 	no_operations = True
 	for i, so in enumerate(operations):
 		method_name = g.value(so, HYDRA.method)
-		expects = replace_prefix(prefix_mapping, g.objects(so, HYDRA.expects))
+		if ptype == HYDRA.TemplatedLink:
+			expects = ["java.util.Map<String,String>"]
+		else:
+			expects = replace_prefix(prefix_mapping, g.objects(so, HYDRA.expects))
 		returns = replace_prefix(prefix_mapping, g.objects(so, HYDRA.returns))
-		generate_method(label, class_type, method_name, expects, returns, paths[i], type_label, f, no_annotations)
+		generate_method(label, class_type, method_name, expects, returns, paths[i], type_label,
+			f, no_annotations)
 		no_operations = False
 	return no_operations
 
@@ -135,8 +140,10 @@ def generate_property(label, prop_type, read_only, write_only, type_label, f):
 		f.write('\n    {}void set{}({} {}){}\n'.format(access_level(type_label), label, prop_type,
 			label[0].lower() + label[1:len(label)], sufix(type_label, 'void')))
 
-def generate_method(label, prop_type, method_name, expects, returns, path, type_label, f, no_annotations):
-	args = ', '.join([ e + ' '+ e[0].lower() + e[1:len(e)] for e in expects ])
+def generate_method(label, prop_type, method_name, expects, returns, path, type_label,
+	f, no_annotations):
+	l=lambda x: x.rpartition('.')[2].rpartition('<')[0]
+	args = ', '.join([ e + ' '+ l(e)[0].lower() + l(e)[1:] for e in expects ])
 	annotations = ''
 	if Literal('GET').eq(method_name):
 		if not no_annotations:
