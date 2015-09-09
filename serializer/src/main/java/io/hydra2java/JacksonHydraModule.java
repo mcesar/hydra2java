@@ -8,15 +8,13 @@ import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.ser.BeanSerializerModifier;
 import com.fasterxml.jackson.databind.ser.std.BeanSerializerBase;
 
-import de.escalon.hypermedia.hydra.serialize.JacksonHydraSerializer;
-
 public class JacksonHydraModule extends SimpleModule {
 
-	static final long serialVersionUID = 0;
+    static final long serialVersionUID = 0;
 
     public JacksonHydraModule() {
         super("json-hydra-module", 
-				new Version(1, 0, 0, null, "de.escalon.hypermedia", "hydra-spring"));
+                new Version(1, 0, 0, null, "de.escalon.hypermedia", "hydra-spring"));
         //setMixInAnnotation(ResourceSupport.class, ResourceSupportMixin.class);
         //setMixInAnnotation(Resources.class, ResourcesMixin.class);
         //setMixInAnnotation(Resource.class, ResourceMixin.class);
@@ -34,8 +32,7 @@ public class JacksonHydraModule extends SimpleModule {
                     JsonSerializer<?> serializer) {
 
                 if (serializer instanceof BeanSerializerBase) {
-                    return new JacksonHydraSerializer(
-                            (BeanSerializerBase) serializer);
+                    return new CustomJacksonHydraSerializer((BeanSerializerBase) serializer);
                 } else {
                     return serializer;
                 }
