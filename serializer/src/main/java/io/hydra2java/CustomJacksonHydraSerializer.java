@@ -3,6 +3,7 @@ package io.hydra2java;
 import static de.escalon.hypermedia.AnnotationUtils.getAnnotation;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.SerializerProvider;
@@ -15,6 +16,16 @@ public class CustomJacksonHydraSerializer extends JacksonHydraSerializer {
     
     public CustomJacksonHydraSerializer(BeanSerializerBase source) {
         super(source);
+        try {
+            for (Field f : JacksonHydraSerializer.class.getDeclaredFields()) {
+                if (f.getName().equals("ldContextFactory")) {
+                    f.setAccessible(true);
+                    f.set(this, new CustomLdContextFactory());
+                }
+            }
+        } catch (IllegalStateException | IllegalAccessException e) {
+            throw new RuntimeException(e);
+        }
     }
     
     protected void serializeFields(Object bean, JsonGenerator jgen, SerializerProvider provider) 
