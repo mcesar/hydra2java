@@ -23,8 +23,29 @@ $ curl http://www.markus-lanthaler.com/hydra/api-demo/vocab | \
 ./hydra2java-rdf.py -t class -p com.example \
 -d <src-path>/simple-service/src/main/java/com/example
 
-(add code to some generated classes and enable json support on pom.xml)
+$ cd serializer
 
+$ mvn clean install
+```
+Add the following to the generated pom.xml, and also enable json support:
+```
+<dependency>
+    <groupId>de.escalon.hypermedia</groupId>
+    <artifactId>hydra-jsonld</artifactId>
+    <version>0.2.0-beta3-SNAPSHOT</version>
+</dependency>
+<dependency>
+    <groupId>io.hydra2java</groupId>
+    <artifactId>serializer</artifactId>
+    <version>1.0-SNAPSHOT</version>
+</dependency>
+```
+In Main.java, startServer method, add the following after instantiation of ResourceConfig:
+```
+rc.register(io.hydra2java.JsonLdProvider.class);
+```
+Add code to some generated classes, and proceed:
+```
 $ cd <scr-path>/simple-service
 
 $ mvn clean test

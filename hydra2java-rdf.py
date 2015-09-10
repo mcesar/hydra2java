@@ -70,21 +70,37 @@ def generate_class(g, c, package, type_label, f, no_annotations, vocab):
         f.write('import javax.ws.rs.Consumes;\n')
         f.write('import javax.ws.rs.Path;\n')
         f.write('import javax.ws.rs.Produces;\n')
-        f.write('import de.escalon.hypermedia.hydra.mapping.*;\n\n')
+        f.write('import de.escalon.hypermedia.hydra.mapping.*;\n')
+        f.write('import io.hydra2java.*;\n\n')
         f.write('@Vocab("{}")\n'.format(vocab))
-        for sp in g.objects(c, HYDRA.supportedProperty):
+        sps = g.objects(c, HYDRA.supportedProperty)
+        terms = ''
+        termTypes = ''
+        for i, sp in enumerate(sps):
             p = g.value(sp, HYDRA.property)
             plabel =  prop_label(p)
             plabel = plabel[0].lower() + plabel[1:]
-            f.write('@Term(define="{}",as="{}")\n'.format(plabel, p))
+            if i > 0:
+                terms += ',\n'
+                termTypes += ',\n'
+            terms += '@Term(define="{}",as="{}")'.format(plabel, p)
+            termTypes += '@TermType(define="{}",type="@id")'.format(plabel)
+        if sps:
+            f.write('@Terms({{\n{}\n}})\n'.format(terms))
+            f.write('@TermTypes({{\n{}\n}})\n'.format(termTypes))
+        f.write('@Id("{}")\n'.format(c))
         f.write('@Path("{}")\n'.format(cl))
-
     extends = ''
     sc = g.value(c,RDFS.subClassOf)
     if sc:
         extends = ' extends ' + replace_prefix(prefix_mapping, sc)
 
-    f.write('public {} {}{}{{\n'.format(type_label, cl, extends))
+    f.write('public {} {}{} {{\n'.format(type_label, cl, extends))
+    f.write('\n    @GET\n    @Produces("application/ld+json")\n    public {} get()'.format(cl))
+    if type_label == 'class':
+        f.write(' {{ return new {}(); }}\n'.format(cl))
+    else:
+        f.write(';\n')
     for sp in g.objects(c, HYDRA.supportedProperty):
         p = g.value(sp, HYDRA.property)
         plabel =  prop_label(p)
@@ -111,6 +127,8 @@ def generate_class(g, c, package, type_label, f, no_annotations, vocab):
 
 def prop_label(p):
     result = replace_prefix(prefix_mapping, p)
+    if '/' in result:
+        result = result.rpartition('/')[2]
     if '_' in result:
         result = ''.join([ l.capitalize() for l in result.split('_') ])
     else:
@@ -163,8 +181,13 @@ def generate_method(label, prop_type, method_name, expects, returns, path, type_
     if Literal('GET').eq(method_name):
         if not no_annotations:
             annotations = '    @GET @Path("{}")\n    @Produces("application/ld+json")\n'.format(path)
-        f.write('\n{}    {}{} get{}({}){}\n'.format(annotations, access_level(type_label), returns[0], label, args,
+        path_label = prop_label(path)
+        path_label = path_label[0].lower() + path_label[1:]
+        f.write('\n{}    {}{} {}({}){}\n'.format(
+            annotations, access_level(type_label), returns[0], path_label, args,
             sufix(type_label, returns[0])))
+        f.write('\n    {}String get{}() {{ return "{}"; }}\n'.format(access_level(type_label),
+                label, path))
     elif Literal('PUT').eq(method_name):
         if not no_annotations:
             annotations = '    @PUT @Path("{}")\n    @Consumes("application/ld+json")\n    @Produces("application/ld+json")\n'.format(path)
