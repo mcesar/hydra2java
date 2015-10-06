@@ -33,6 +33,9 @@ def main():
     parser.add_argument("-p", "--package", default="")
     parser.add_argument("-d", "--destination", default="")
     parser.add_argument("-a", "--no_annotations", action="store_true", default=False)
+    parser.add_argument("-e", "--entry_point", default="EntryPoint")
+    parser.add_argument("-m", "--members", default="all")
+    parser.add_argument("-l", "--delegate", action="store_true", default=False)
     args = parser.parse_args()
     g = Graph().parse(sys.stdin, format=args.format)
     api = g.value(None, RDF.type, HYDRA.ApiDocumentation)
@@ -53,12 +56,18 @@ def main():
             continue
         if args.destination != '':
             f = file('{}{}{}.java'.format(args.destination, os.sep, class_label(c)), 'w')
-        generate_class(g, c, args.package, args.type, f, args.no_annotations, vocab)
+        generate_class(g, c, args.package, args.type, f, args.no_annotations, vocab,
+                args.entry_point, args.members, args.delegate)
         if args.destination != '':
             f.close()
 
-def generate_class(g, c, package, type_label, f, no_annotations, vocab):
+def generate_class(g, c, package, type_label, f, no_annotations, vocab, entry_point_label, 
+        members, delegate):
     cl = class_label(c)
+    if members == "methods":
+        cl += 'Resource'
+        if type_label == 'class':
+            cl += 'JaxRsImpl'
     if package != '':
         f.write('package {};\n\n'.format(package))
 
@@ -89,18 +98,21 @@ def generate_class(g, c, package, type_label, f, no_annotations, vocab):
             f.write('@Terms({{\n{}\n}})\n'.format(terms))
             f.write('@TermTypes({{\n{}\n}})\n'.format(termTypes))
         f.write('@Id("{}")\n'.format(c))
-        f.write('@Path("{}")\n'.format(cl))
+        f.write('@Path("{}")\n'.format(class_label(c)))
     extends = ''
     sc = g.value(c,RDFS.subClassOf)
     if sc:
         extends = ' extends ' + replace_prefix(prefix_mapping, sc)
 
     f.write('public {} {}{} {{\n'.format(type_label, cl, extends))
-    f.write('\n    @GET\n    @Produces("application/ld+json")\n    public {} get()'.format(cl))
-    if type_label == 'class':
-        f.write(' {{ return new {}(); }}\n'.format(cl))
-    else:
-        f.write(';\n')
+    if delegate and type_label == 'class' and members == 'methods':
+        f.write('\n    @javax.inject.Inject\n    private {} delegate;\n'.
+                format(class_label(c) + 'Resource'))
+    if class_label(c) == entry_point_label and type_label == 'class':
+            if not no_annotations:
+                f.write('\n    @GET\n    @Produces("application/ld+json")')
+            f.write('\n    public {} get()'.format(cl))
+            f.write(' {{ return new {}(); }}\n'.format(cl))
     for sp in g.objects(c, HYDRA.supportedProperty):
         p = g.value(sp, HYDRA.property)
         plabel =  prop_label(p)
@@ -114,15 +126,17 @@ def generate_class(g, c, package, type_label, f, no_annotations, vocab):
         write_only = Literal(True).eq(g.value(sp, HYDRA.writeonly))
         ptype = g.value(p, RDF.type, None)
         if ptype in [HYDRA.Link, HYDRA.TemplatedLink]:
-            operations = list(g.objects(p, HYDRA.supportedOperation))
-            generate_methods(g, plabel, prop_type, operations,
-                [ plabel + '/' + str(o) for o in operations ], type_label, f, 
-                no_annotations, ptype)
-        else:
-            generate_property(plabel, prop_type, read_only, write_only, type_label, f)
-    operations = list(g.objects(c, HYDRA.supportedOperation))
-    generate_methods(g, cl, cl, operations, [ str(o) for o in operations ], type_label, f, 
-            no_annotations, HYDRA.Link)
+            if members in ("methods", "all"):
+                operations = list(g.objects(p, HYDRA.supportedOperation))
+                generate_methods(g, plabel, prop_type, operations,
+                    [ plabel + '/' + str(o) for o in operations ], type_label, f, 
+                    no_annotations, ptype, delegate)
+        elif members in ("properties", "all"):
+                generate_property(plabel, prop_type, read_only, write_only, type_label, f)
+    if members in ("methods", "all"):
+        operations = list(g.objects(c, HYDRA.supportedOperation))
+        generate_methods(g, cl, cl, operations, [ str(o) for o in operations ], type_label, f, 
+                no_annotations, HYDRA.Link, delegate)
     f.write('}\n')
 
 def prop_label(p):
@@ -151,7 +165,8 @@ def replace_prefix(prefix_mapping, uri):
                 result = result.rpartition('/')[2]
     return result
 
-def generate_methods(g, label, class_type, operations, paths, type_label, f, no_annotations, ptype):
+def generate_methods(g, label, class_type, operations, paths, type_label, f, no_annotations, 
+        ptype, delegate):
     no_operations = True
     for i, so in enumerate(operations):
         method_name = g.value(so, HYDRA.method)
@@ -161,20 +176,20 @@ def generate_methods(g, label, class_type, operations, paths, type_label, f, no_
             expects = replace_prefix(prefix_mapping, g.objects(so, HYDRA.expects))
         returns = replace_prefix(prefix_mapping, g.objects(so, HYDRA.returns))
         generate_method(label, class_type, method_name, expects, returns, paths[i], type_label,
-            f, no_annotations)
+            f, no_annotations, delegate)
         no_operations = False
     return no_operations
 
 def generate_property(label, prop_type, read_only, write_only, type_label, f):
     if not write_only:
         f.write('\n    {}{} get{}(){}\n'.format(access_level(type_label), prop_type, label,
-            sufix(type_label, prop_type)))
+            sufix(type_label, prop_type, False)))
     if not read_only:
         f.write('\n    {}void set{}({} {}){}\n'.format(access_level(type_label), label, prop_type,
-            label[0].lower() + label[1:len(label)], sufix(type_label, 'void')))
+            label[0].lower() + label[1:len(label)], sufix(type_label, 'void', False)))
 
 def generate_method(label, prop_type, method_name, expects, returns, path, type_label,
-    f, no_annotations):
+    f, no_annotations, delegate):
     l=lambda x: x.rpartition('.')[2].rpartition('<')[0]
     args = ', '.join([ e + ' '+ l(e)[0].lower() + l(e)[1:] for e in expects ])
     annotations = ''
@@ -185,39 +200,47 @@ def generate_method(label, prop_type, method_name, expects, returns, path, type_
         path_label = path_label[0].lower() + path_label[1:]
         f.write('\n{}    {}{} {}({}){}\n'.format(
             annotations, access_level(type_label), returns[0], path_label, args,
-            sufix(type_label, returns[0])))
-        f.write('\n    {}String get{}() {{ return "{}"; }}\n'.format(access_level(type_label),
-                label, path))
+            sufix(type_label, returns[0], delegate, path_label)))
+        #f.write('\n    {}String get{}() {{ return "{}"; }}\n'.format(access_level(type_label),
+        #        label, path))
     elif Literal('PUT').eq(method_name):
         if not no_annotations:
             annotations = '    @PUT @Path("{}")\n    @Consumes("application/ld+json")\n    @Produces("application/ld+json")\n'.format(path)
         f.write('\n{}    {}{} set{}({}){}\n'.format(annotations, access_level(type_label), returns[0], label, args,
-            sufix(type_label, returns[0])))
+            sufix(type_label, returns[0], delegate, label)))
     elif Literal('POST').eq(method_name) and prop_type == prefix_mapping[HYDRA.Collection]:
         if not no_annotations:
             annotations = '    @POST @Path("{}")\n    @Consumes("application/ld+json")\n    @Produces("application/ld+json")\n'.format(path)
-        f.write('\n{}    {}{} addTo{}({}){}\n'.format(annotations, access_level(type_label), returns[0], label, args, sufix(type_label, returns[0])))
+        f.write('\n{}    {}{} addTo{}({}){}\n'.format(annotations, access_level(type_label), 
+            returns[0], label, args, sufix(type_label, returns[0], delegate, label)))
     elif Literal('POST').eq(method_name) and prop_type == HYDRA.Resource:
         if not no_annotations:
             annotations = '    @POST @Path("{}")\n    @Consumes("application/ld+json")\n    @Produces("application/ld+json")\n'.format(path)
-        f.write('\n{}    {}{} {}({}){}\n'.format(annotations, access_level(type_label), returns[0], label, args,
-            sufix(type_label, returns[0])))
+        f.write('\n{}    {}{} {}({}){}\n'.format(annotations, access_level(type_label), 
+            returns[0], label, args, sufix(type_label, returns[0], delegate, label)))
     elif Literal('DELETE').eq(method_name):
         if not no_annotations:
             annotations = '    @DELETE @Path("{}")\n    @Consumes("application/ld+json")\n    @Produces("application/ld+json")\n'.format(path)
-        f.write('\n{}    {}{} remove{}({}){}\n'.format(annotations, access_level(type_label), returns[0], label, args,
-            sufix(type_label, returns[0])))
+        f.write('\n{}    {}{} remove{}({}){}\n'.format(annotations, access_level(type_label), 
+            returns[0], label, args, sufix(type_label, returns[0], delegate, label)))
     else:
         raise Exception('Operation not supported:', label, prop_type, expects, returns, method_name)
 
-def sufix(type_label, returns):
+def sufix(type_label, returns, delegate, method_name=''):
     if type_label == 'class':
         if returns == 'void':
-            return ' {}'
-        elif returns == 'boolean':
-            return ' { return false; }'
+            if delegate:
+                return ' {{\n        delegate.{}();\n    }}'.format(method_name)
+            else:
+                return ' {}'
         else:
-            return ' { return null; }'
+            if delegate:
+                return ' {{\n        return delegate.{}();\n    }}'.format(method_name)
+            else:
+                if returns == 'boolean':
+                    return ' { return false; }'
+                else:
+                    return ' { return null; }'
     else:
         return ';'
 
