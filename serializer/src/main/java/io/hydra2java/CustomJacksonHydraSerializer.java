@@ -4,6 +4,11 @@ import static de.escalon.hypermedia.AnnotationUtils.getAnnotation;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.net.URI;
+
+import javax.ws.rs.Path;
+import javax.ws.rs.core.UriBuilder;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.SerializerProvider;
@@ -33,6 +38,16 @@ public class CustomJacksonHydraSerializer extends JacksonHydraSerializer {
         final Id classId = getAnnotation(bean.getClass(), Id.class);
         if (classId != null) {
             jgen.writeStringField(JsonLdKeywords.AT_ID, classId.value());
+        }
+        final Resource resource = getAnnotation(bean.getClass(), Resource.class);
+        if (resource != null) {
+            for (Method m : resource.value().getMethods()) {
+                Property p = m.getAnnotation(Property.class);
+                if (p != null && m.getAnnotation(Path.class) != null) {
+                    URI uri = UriBuilder.fromMethod(resource.value(), m.getName()).build();
+                    jgen.writeStringField(p.value(), uri.toString());
+                }
+            }
         }
         super.serializeFields(bean, jgen, provider);
     }

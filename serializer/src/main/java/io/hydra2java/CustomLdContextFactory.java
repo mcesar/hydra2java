@@ -13,13 +13,13 @@ public class CustomLdContextFactory extends LdContextFactory {
         Map<String, Object> result = super.getTerms(mixinSource, bean, mixInClass);
         final TermTypes annotatedTerms = getAnnotation(bean.getClass(), TermTypes.class);
         if (annotatedTerms != null) {
-            final TermType[] terms = annotatedTerms.value();
-            for (TermType term : terms) {
+            final TermType[] types = annotatedTerms.value();
+            for (TermType termType : types) {
                 for (Map.Entry<String, Object> e : result.entrySet()) {
-                    if (e.getKey().equals(term.define())) {
+                    if (e.getKey().equals(termType.define())) {
                         Map<String, String> m = new LinkedHashMap<String, String>();
                         m.put("@id", e.getValue().toString());
-                        m.put("@type", term.type());
+                        m.put("@type", termType.type());
                         result.put(e.getKey(), m);
                     }
                 }

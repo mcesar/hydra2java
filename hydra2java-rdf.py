@@ -54,20 +54,21 @@ def main():
             continue
         if ontology and not c.startswith(ontology):
             continue
+        sufix = ''
+        if args.members == "methods":
+            sufix += 'Resource'
+            if args.type == 'class':
+                sufix += 'JaxRsImpl'
         if args.destination != '':
-            f = file('{}{}{}.java'.format(args.destination, os.sep, class_label(c)), 'w')
+            f = file('{}{}{}{}.java'.format(args.destination, os.sep, class_label(c), sufix), 'w')
         generate_class(g, c, args.package, args.type, f, args.no_annotations, vocab,
-                args.entry_point, args.members, args.delegate)
+                args.entry_point, args.members, args.delegate, sufix)
         if args.destination != '':
             f.close()
 
 def generate_class(g, c, package, type_label, f, no_annotations, vocab, entry_point_label, 
-        members, delegate):
-    cl = class_label(c)
-    if members == "methods":
-        cl += 'Resource'
-        if type_label == 'class':
-            cl += 'JaxRsImpl'
+        members, delegate, sufix):
+    cl = class_label(c) + sufix
     if package != '':
         f.write('package {};\n\n'.format(package))
 
@@ -97,8 +98,11 @@ def generate_class(g, c, package, type_label, f, no_annotations, vocab, entry_po
         if sps:
             f.write('@Terms({{\n{}\n}})\n'.format(terms))
             f.write('@TermTypes({{\n{}\n}})\n'.format(termTypes))
+        f.write('@Expose("{}")\n'.format(class_label(c)))
         f.write('@Id("{}")\n'.format(c))
         f.write('@Path("{}")\n'.format(class_label(c)))
+        if type_label == 'class':
+            f.write('@Resource({}.class)\n'.format(cl))
     extends = ''
     sc = g.value(c,RDFS.subClassOf)
     if sc:
@@ -195,7 +199,7 @@ def generate_method(label, prop_type, method_name, expects, returns, path, type_
     annotations = ''
     if Literal('GET').eq(method_name):
         if not no_annotations:
-            annotations = '    @GET @Path("{}")\n    @Produces("application/ld+json")\n'.format(path)
+            annotations = '    @GET\n    @Path("{}")\n    @Property("{}")\n    @Produces("application/ld+json")\n'.format(path, label[0].lower() + label[1:])
         path_label = prop_label(path)
         path_label = path_label[0].lower() + path_label[1:]
         f.write('\n{}    {}{} {}({}){}\n'.format(
@@ -205,22 +209,22 @@ def generate_method(label, prop_type, method_name, expects, returns, path, type_
         #        label, path))
     elif Literal('PUT').eq(method_name):
         if not no_annotations:
-            annotations = '    @PUT @Path("{}")\n    @Consumes("application/ld+json")\n    @Produces("application/ld+json")\n'.format(path)
-        f.write('\n{}    {}{} set{}({}){}\n'.format(annotations, access_level(type_label), returns[0], label, args,
-            sufix(type_label, returns[0], delegate, label)))
+            annotations = '    @PUT\n    @Path("{}")\n    @Property("{}")\n    @Consumes("application/ld+json")\n    @Produces("application/ld+json")\n'.format(path, label[0].lower() + label[1:])
+        f.write('\n{}    {}{} set{}({}){}\n'.format(annotations, access_level(type_label), 
+            returns[0], label, args, sufix(type_label, returns[0], delegate, label)))
     elif Literal('POST').eq(method_name) and prop_type == prefix_mapping[HYDRA.Collection]:
         if not no_annotations:
-            annotations = '    @POST @Path("{}")\n    @Consumes("application/ld+json")\n    @Produces("application/ld+json")\n'.format(path)
+            annotations = '    @POST\n    @Path("{}")\n    @Property("{}")\n    @Consumes("application/ld+json")\n    @Produces("application/ld+json")\n'.format(path, label[0].lower() + label[1:])
         f.write('\n{}    {}{} addTo{}({}){}\n'.format(annotations, access_level(type_label), 
             returns[0], label, args, sufix(type_label, returns[0], delegate, label)))
     elif Literal('POST').eq(method_name) and prop_type == HYDRA.Resource:
         if not no_annotations:
-            annotations = '    @POST @Path("{}")\n    @Consumes("application/ld+json")\n    @Produces("application/ld+json")\n'.format(path)
+            annotations = '    @POST\n    @Path("{}")\n    @Property("{}")\n    @Consumes("application/ld+json")\n    @Produces("application/ld+json")\n'.format(path, label[0].lower() + label[1:])
         f.write('\n{}    {}{} {}({}){}\n'.format(annotations, access_level(type_label), 
             returns[0], label, args, sufix(type_label, returns[0], delegate, label)))
     elif Literal('DELETE').eq(method_name):
         if not no_annotations:
-            annotations = '    @DELETE @Path("{}")\n    @Consumes("application/ld+json")\n    @Produces("application/ld+json")\n'.format(path)
+            annotations = '    @DELETE\n    @Path("{}")\n    @Property("{}")\n    @Consumes("application/ld+json")\n    @Produces("application/ld+json")\n'.format(path, label[0].lower() + label[1:])
         f.write('\n{}    {}{} remove{}({}){}\n'.format(annotations, access_level(type_label), 
             returns[0], label, args, sufix(type_label, returns[0], delegate, label)))
     else:
