@@ -5,10 +5,10 @@ import static de.escalon.hypermedia.AnnotationUtils.getAnnotation;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.net.URI;
 
 import javax.ws.rs.Path;
 import javax.ws.rs.core.UriBuilder;
+import javax.ws.rs.core.UriInfo;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.SerializerProvider;
@@ -18,7 +18,9 @@ import de.escalon.hypermedia.hydra.serialize.JacksonHydraSerializer;
 import de.escalon.hypermedia.hydra.serialize.JsonLdKeywords;
 
 public class CustomJacksonHydraSerializer extends JacksonHydraSerializer {
-    
+
+    private UriInfo uriInfo;
+
     public CustomJacksonHydraSerializer(BeanSerializerBase source) {
         super(source);
         try {
@@ -32,20 +34,25 @@ public class CustomJacksonHydraSerializer extends JacksonHydraSerializer {
             throw new RuntimeException(e);
         }
     }
+
+    public void setUriInfo(UriInfo uriInfo) {
+        this.uriInfo = uriInfo;
+    }
     
     protected void serializeFields(Object bean, JsonGenerator jgen, SerializerProvider provider) 
         throws IOException {
-        final Id classId = getAnnotation(bean.getClass(), Id.class);
-        if (classId != null) {
-            jgen.writeStringField(JsonLdKeywords.AT_ID, classId.value());
-        }
+        UriBuilder ub = uriInfo.getRequestUriBuilder();
         final Resource resource = getAnnotation(bean.getClass(), Resource.class);
+        //final Id classId = getAnnotation(bean.getClass(), Id.class);
         if (resource != null) {
+            //if (classId != null) {
+                jgen.writeStringField(JsonLdKeywords.AT_ID, ub.path("").build().toString());
+            //}
             for (Method m : resource.value().getMethods()) {
                 Property p = m.getAnnotation(Property.class);
                 if (p != null && m.getAnnotation(Path.class) != null) {
-                    URI uri = UriBuilder.fromMethod(resource.value(), m.getName()).build();
-                    jgen.writeStringField(p.value(), uri.toString());
+                    ub = uriInfo.getRequestUriBuilder();
+                    jgen.writeStringField(p.value(), ub.path(m).build().toString());
                 }
             }
         }
