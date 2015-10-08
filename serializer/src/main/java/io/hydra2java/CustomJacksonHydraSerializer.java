@@ -4,6 +4,7 @@ import static de.escalon.hypermedia.AnnotationUtils.getAnnotation;
 
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 import javax.ws.rs.Path;
@@ -43,16 +44,34 @@ public class CustomJacksonHydraSerializer extends JacksonHydraSerializer {
         throws IOException {
         UriBuilder ub = uriInfo.getRequestUriBuilder();
         final Resource resource = getAnnotation(bean.getClass(), Resource.class);
-        //final Id classId = getAnnotation(bean.getClass(), Id.class);
         if (resource != null) {
-            //if (classId != null) {
-                jgen.writeStringField(JsonLdKeywords.AT_ID, ub.path("").build().toString());
-            //}
             for (Method m : resource.value().getMethods()) {
                 Property p = m.getAnnotation(Property.class);
                 if (p != null && m.getAnnotation(Path.class) != null) {
                     ub = uriInfo.getRequestUriBuilder();
                     jgen.writeStringField(p.value(), ub.path(m).build().toString());
+                }
+                Id id= m.getAnnotation(Id.class);
+                if (id != null && bean.getClass().equals(m.getReturnType())) {
+                    Object idValue = "";
+                    for (Method mb : bean.getClass().getMethods()) {
+                        if (mb.getAnnotation(Id.class) != null && 
+                                !bean.getClass().equals(mb.getReturnType())) {
+                            try {
+                                idValue = mb.invoke(bean);
+                            } catch (IllegalAccessException e) {
+                                throw new IOException(e);
+                            } catch(InvocationTargetException e) {
+                                throw new IOException(e);
+                            }
+                        }
+                    }
+                    UriBuilder path = ub;
+                    if (m.getAnnotation(Path.class) != null) {
+                        path = ub.path(m);
+                    }
+                    jgen.writeStringField(JsonLdKeywords.AT_ID, 
+                        path.path(idValue.toString()).build().toString());
                 }
             }
         }

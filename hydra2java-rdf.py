@@ -99,7 +99,6 @@ def generate_class(g, c, package, type_label, f, no_annotations, vocab, entry_po
             f.write('@Terms({{\n{}\n}})\n'.format(terms))
             f.write('@TermTypes({{\n{}\n}})\n'.format(termTypes))
         f.write('@Expose("{}")\n'.format(class_label(c)))
-        f.write('@Id("{}")\n'.format(c))
         f.write('@Path("{}")\n'.format(class_label(c)))
         if type_label == 'class':
             f.write('@Resource({}.class)\n'.format(cl))
@@ -115,6 +114,7 @@ def generate_class(g, c, package, type_label, f, no_annotations, vocab, entry_po
     if class_label(c) == entry_point_label and type_label == 'class':
             if not no_annotations:
                 f.write('\n    @GET\n    @Produces("application/ld+json")')
+                f.write('\n    @Id')
             f.write('\n    public {} get()'.format(cl))
             f.write(' {{ return new {}(); }}\n'.format(cl))
     for sp in g.objects(c, HYDRA.supportedProperty):
