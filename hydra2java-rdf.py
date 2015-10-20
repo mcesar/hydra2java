@@ -36,6 +36,7 @@ def main():
     parser.add_argument("-a", "--no_annotations", action="store_true", default=False)
     parser.add_argument("-m", "--members", default="all")
     parser.add_argument("-l", "--delegate", action="store_true", default=False)
+    parser.add_argument("-s", "--supplemental_annotations", default="")
     args = parser.parse_args()
     g = Graph().parse(sys.stdin, format=args.format)
     api = g.value(None, RDF.type, HYDRA.ApiDocumentation)
@@ -48,6 +49,9 @@ def main():
         objects = g.subjects(RDFS.isDefinedBy, ontology)
         prefix_mapping[ontology] = ''
         vocab = ontology
+    supplemental_annotations = []
+    if args.supplemental_annotations:
+        supplemental_annotations = args.supplemental_annotations.split(',')
     f = sys.stdout
     for c in objects:
         if api and not c.startswith(api):
@@ -62,12 +66,12 @@ def main():
         if args.destination != '':
             f = file('{}{}{}{}.java'.format(args.destination, os.sep, class_label(c), sufix), 'w')
         generate_class(g, c, args.package, args.type, f, args.no_annotations, vocab,
-                args.members, args.delegate, sufix)
+                args.members, args.delegate, sufix, supplemental_annotations)
         if args.destination != '':
             f.close()
 
 def generate_class(g, c, package, type_label, f, no_annotations, vocab,
-        members, delegate, sufix):
+        members, delegate, sufix, supplemental_annotations):
     cl = class_label(c) + sufix
     if package != '':
         f.write('package {};\n\n'.format(package))
@@ -102,6 +106,8 @@ def generate_class(g, c, package, type_label, f, no_annotations, vocab,
         f.write('@Path("{}")\n'.format(class_label(c)))
         if type_label == 'class':
             f.write('@Resource({}.class)\n'.format(cl))
+        for ann in supplemental_annotations:
+            f.write('@' + ann + '\n')
     extends = ''
     sc = g.value(c,RDFS.subClassOf)
     if sc:
