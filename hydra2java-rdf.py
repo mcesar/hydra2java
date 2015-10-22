@@ -1,5 +1,8 @@
 #!/usr/bin/python
 
+# TODO
+# - quando tiver IriTemplate e as opcoes forem sem anotacoes, usar o tipo Map
+
 import sys
 import json
 import types
@@ -84,6 +87,8 @@ def generate_class(g, c, package, type_label, f, no_annotations, vocab,
         f.write('import javax.ws.rs.Consumes;\n')
         f.write('import javax.ws.rs.Path;\n')
         f.write('import javax.ws.rs.Produces;\n')
+        f.write('import javax.ws.rs.core.Context;\n')
+        f.write('import javax.ws.rs.core.UriInfo;\n')
         f.write('import de.escalon.hypermedia.hydra.mapping.*;\n')
         f.write('import io.hydra2java.*;\n\n')
         f.write('@Vocab("{}")\n'.format(vocab))
@@ -92,14 +97,19 @@ def generate_class(g, c, package, type_label, f, no_annotations, vocab,
         termTypes = ''
         for i, sp in enumerate(sps):
             p = g.value(sp, HYDRA.property)
-            plabel =  prop_label(p)
-            plabel = plabel[0].lower() + plabel[1:]
+            plabel =  camelCase(prop_label(p))
             if i > 0:
                 terms += ',\n'
                 termTypes += ',\n'
             terms += '@Term(define="{}",as="{}")'.format(plabel, p)
             termTypes += '@TermType(define="{}",type="@id")'.format(plabel)
-        if sps:
+        if list(g.objects(c, HYDRA.supportedOperation)):
+            if len(terms) > 0:
+                terms += ',\n'
+                termTypes += ',\n'
+            terms += '@Term(define="{}",as="{}")'.format(camelCase(class_label(c)), c)
+            termTypes += '@TermType(define="{}",type="@id")'.format(camelCase(class_label(c)))
+        if len(terms) > 0:
             f.write('@Terms({{\n{}\n}})\n'.format(terms))
             f.write('@TermTypes({{\n{}\n}})\n'.format(termTypes))
         f.write('@Expose("{}")\n'.format(class_label(c)))
@@ -134,15 +144,18 @@ def generate_class(g, c, package, type_label, f, no_annotations, vocab,
                 operations = list(g.objects(p, HYDRA.supportedOperation))
                 generate_methods(g, plabel, prop_type, operations,
                     [ plabel + '/' + str(o) for o in operations ], type_label, f, 
-                    no_annotations, ptype, delegate)
+                    no_annotations, ptype, delegate, None)
         elif members in ("properties", "all"):
                 generate_property(plabel, prop_type, read_only, write_only, type_label, f)
     if members in ("methods", "all"):
         operations = list(g.objects(c, HYDRA.supportedOperation))
-        generate_methods(g, class_label(c), class_label(c), 
+        generate_methods(g, class_label(c), None,
                 operations, [ str(o) for o in operations ], type_label, f, 
-                no_annotations, HYDRA.Link, delegate)
+                no_annotations, HYDRA.Link, delegate, sufix)
     f.write('}\n')
+
+def camelCase(s):
+    return s[0].lower() + s[1:]
 
 def prop_label(p):
     result = replace_prefix(prefix_mapping, p)
@@ -170,21 +183,6 @@ def replace_prefix(prefix_mapping, uri):
                 result = result.rpartition('/')[2]
     return result
 
-def generate_methods(g, label, class_type, operations, paths, type_label, f, no_annotations, 
-        ptype, delegate):
-    no_operations = True
-    for i, so in enumerate(operations):
-        method_name = g.value(so, HYDRA.method)
-        if ptype == HYDRA.TemplatedLink:
-            expects = ["java.util.Map<String,String>"]
-        else:
-            expects = replace_prefix(prefix_mapping, g.objects(so, HYDRA.expects))
-        returns = replace_prefix(prefix_mapping, g.objects(so, HYDRA.returns))
-        generate_method(label, class_type, method_name, expects, returns, paths[i], type_label,
-            f, no_annotations, delegate, g.value(so, HX.IdGenerator))
-        no_operations = False
-    return no_operations
-
 def generate_property(label, prop_type, read_only, write_only, type_label, f):
     if not write_only:
         f.write('\n    {}{} get{}(){}\n'.format(access_level(type_label), prop_type, label,
@@ -193,9 +191,28 @@ def generate_property(label, prop_type, read_only, write_only, type_label, f):
         f.write('\n    {}void set{}({} {}){}\n'.format(access_level(type_label), label, prop_type,
             label[0].lower() + label[1:len(label)], sufix(type_label, 'void', False)))
 
+def generate_methods(g, label, class_type, operations, paths, type_label, f, no_annotations, 
+        ptype, delegate, sufix):
+    no_operations = True
+    for i, so in enumerate(operations):
+        method_name = g.value(so, HYDRA.method)
+        if ptype == HYDRA.TemplatedLink:
+            if no_annotations:
+                expects = ["java.util.Map<String,String>"]
+            else:
+                expects = ["@Context UriInfo"]
+        else:
+            expects = replace_prefix(prefix_mapping, g.objects(so, HYDRA.expects))
+        returns = replace_prefix(prefix_mapping, g.objects(so, HYDRA.returns))
+        returns = [ r+sufix if r == label else r for r in returns ]
+        generate_method(label, class_type, method_name, expects, returns, paths[i], type_label,
+            f, no_annotations, delegate, g.value(so, HX.IdGenerator))
+        no_operations = False
+    return no_operations
+
 def generate_method(label, prop_type, method_name, expects, returns, path, type_label,
         f, no_annotations, delegate, id_generator):
-    l = lambda x: x.rpartition('.')[2].rpartition('<')[0]
+    l = lambda x: list(list(x.rpartition('.')).pop().partition('<')[0].rpartition(' ')).pop()
     args = ', '.join([ e + ' '+ l(e)[0].lower() + l(e)[1:] for e in expects ])
     labelLower = label[0].lower() + label[1:]
     if id_generator:
@@ -212,7 +229,7 @@ def generate_method(label, prop_type, method_name, expects, returns, path, type_
         path_label = path_label[0].lower() + path_label[1:]
         f.write('\n{}    {}{} {}({}){}\n'.format(
             annotations, access_level(type_label), returns[0], path_label, args,
-            sufix(type_label, returns[0], delegate, path_label)))
+            sufix(type_label, returns[0], delegate, path_label, expects)))
     elif Literal('PUT').eq(method_name):
         if not no_annotations:
             annotations = annotations.format('PUT', path, labelLower, 'Consumes', ig_str)
@@ -236,7 +253,7 @@ def generate_method(label, prop_type, method_name, expects, returns, path, type_
     else:
         raise Exception('Operation not supported:', label, prop_type, expects, returns, method_name)
 
-def sufix(type_label, returns, delegate, method_name=''):
+def sufix(type_label, returns, delegate, method_name='', expects=None):
     if type_label == 'class':
         if returns == 'void':
             if delegate:
@@ -245,7 +262,10 @@ def sufix(type_label, returns, delegate, method_name=''):
                 return ' {}'
         else:
             if delegate:
-                return ' {{\n        return delegate.{}();\n    }}'.format(method_name)
+                delegate_arg = ''
+                if expects != None and '@Context UriInfo' in expects:
+                    delegate_arg = 'uriInfo.getQueryParameters()'
+                return ' {{\n        return delegate.{}({});\n    }}'.format(method_name, delegate_arg)
             else:
                 if returns == 'boolean':
                     return ' { return false; }'

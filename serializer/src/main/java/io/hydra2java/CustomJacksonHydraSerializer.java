@@ -49,29 +49,38 @@ public class CustomJacksonHydraSerializer extends JacksonHydraSerializer {
                 Property p = m.getAnnotation(Property.class);
                 if (p != null && m.getAnnotation(Path.class) != null) {
                     ub = uriInfo.getRequestUriBuilder();
-                    jgen.writeStringField(p.value(), ub.path(m).build().toString());
+                    if (m.getAnnotation(Id.class) != null && 
+                            m.getReturnType().equals(bean.getClass())) {
+                        jgen.writeStringField(p.value(), ub.build().toString());
+                    } else {
+                        jgen.writeStringField(p.value(), ub.path(m).build().toString());
+                    }
                 }
                 Id id= m.getAnnotation(Id.class);
                 if (id != null && bean.getClass().equals(m.getReturnType())) {
-                    Object idValue = "";
-                    for (Method mb : bean.getClass().getMethods()) {
-                        if (mb.getAnnotation(Id.class) != null && 
-                                !bean.getClass().equals(mb.getReturnType())) {
-                            try {
-                                idValue = mb.invoke(bean);
-                            } catch (IllegalAccessException e) {
-                                throw new IOException(e);
-                            } catch(InvocationTargetException e) {
-                                throw new IOException(e);
+                    if (bean.getClass().equals(resource.value())) {
+                        jgen.writeStringField(JsonLdKeywords.AT_ID, ub.build().toString());
+                    } else {
+                        Object idValue = "";
+                        for (Method mb : bean.getClass().getMethods()) {
+                            if (mb.getAnnotation(Id.class) != null && 
+                                    !bean.getClass().equals(mb.getReturnType())) {
+                                try {
+                                    idValue = mb.invoke(bean);
+                                } catch (IllegalAccessException e) {
+                                    throw new IOException(e);
+                                } catch(InvocationTargetException e) {
+                                    throw new IOException(e);
+                                }
                             }
                         }
-                    }
-                    UriBuilder path = ub;
-                    if (m.getAnnotation(Path.class) != null) {
-                        path = ub.path(m);
-                    }
-                    jgen.writeStringField(JsonLdKeywords.AT_ID, 
-                        path.path(idValue.toString()).build().toString());
+                        UriBuilder path = ub;
+                        if (m.getAnnotation(Path.class) != null) {
+                            path = ub.path(m);
+                        }
+                        jgen.writeStringField(JsonLdKeywords.AT_ID, 
+                            path.path(idValue.toString()).build().toString());
+                        }
                 }
             }
         }
