@@ -1,8 +1,5 @@
 #!/usr/bin/python
 
-# TODO
-# - quando tiver IriTemplate e as opcoes forem sem anotacoes, usar o tipo Map
-
 import sys
 import json
 import types
