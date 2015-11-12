@@ -51,9 +51,9 @@
 		-->
 		<dependency>
 		    <groupId>de.escalon.hypermedia</groupId>
-			<artifactId>hydra-jsonld</artifactId>
-	        <version>0.2.0-beta3-SNAPSHOT</version>
-			</dependency>
+		    <artifactId>hydra-jsonld</artifactId>
+		    <version>[0.2.0-beta3-SNAPSHOT,)</version>
+		</dependency>
 	</dependencies>
 
     <build>
