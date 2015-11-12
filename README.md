@@ -58,11 +58,11 @@ $ mvn exec:java
 
 ## Command-Line Options
 
--f, --format=json-ld|..., default=json-ld
--t, --type=class|interface, default=interface
--p, --package=<package>, default=
--d, --destination=<path>, default=
--a, --no_annotations, default=False
--m, --members=methods|properties|all, default=all
--l, --delegate, default=False
--s, --supplemental_annotations=<ann1>,<ann2>,..., default=
+- -f, --format=json-ld|..., default=json-ld
+- -t, --type=class|interface, default=interface
+- -p, --package=<package>, default=
+- -d, --destination=<path>, default=
+- -a, --no_annotations, default=False
+- -m, --members=methods|properties|all, default=all
+- -l, --delegate, default=False
+- -s, --supplemental_annotations=<ann1>,<ann2>,..., default=
