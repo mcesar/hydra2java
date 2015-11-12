@@ -26,7 +26,7 @@ $ curl http://www.markus-lanthaler.com/hydra/api-demo/vocab | \
 $ cd serializer
 
 $ mvn clean install
-(it may be necessary to clone the hydra-java repository from github and install it  manually)
+(it may need to clone the hydra-java github repository and install it  manually)
 ```
 Add the following to the generated pom.xml, and also enable json support:
 ```
