@@ -1,5 +1,5 @@
 # hydra2java
-Code generator that can be used to generate java interfaces from a Hydra-based JSON-LD document. 
+Code generator that can be used to generate java interfaces from a Hydra-based JSON-LD document.
 
 ## Getting Started
 
@@ -7,7 +7,7 @@ Code generator that can be used to generate java interfaces from a Hydra-based J
 - `$ chmod +x hydra2java-rdf.py`
 - To test: `$ curl http://www.markus-lanthaler.com/hydra/api-demo/vocab | ./hydra2java-rdf.py`
 
-- To test with Jersey: 
+- To test with Jersey:
 
 ```
 $ cd <scr-path>
@@ -55,3 +55,14 @@ $ mvn exec:java
 
 (send some requests)
 ```
+
+## Command-Line Options
+
+-f, --format=json-ld|..., default=json-ld
+-t, --type=class|interface, default=interface
+-p, --package=<package>, default=
+-d, --destination=<path>, default=
+-a, --no_annotations, default=False
+-m, --members=methods|properties|all, default=all
+-l, --delegate, default=False
+-s, --supplemental_annotations=<ann1>,<ann2>,..., default=
