@@ -33,7 +33,7 @@ Add the following to the generated pom.xml, and also enable json support:
 <dependency>
     <groupId>de.escalon.hypermedia</groupId>
     <artifactId>hydra-jsonld</artifactId>
-    <version>0.2.0-beta3-SNAPSHOT</version>
+    <version>[0.2.0-beta3-SNAPSHOT,)</version>
 </dependency>
 <dependency>
     <groupId>io.hydra2java</groupId>
