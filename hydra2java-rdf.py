@@ -14,7 +14,7 @@ rdfextras.registerplugins()
 
 HYDRA = Namespace('http://www.w3.org/ns/hydra/core#')
 HX = Namespace('http://api.siop.gov.br/hydra-extension#')
-OWL = Namespace('http://www.w3.org/2002/07/owl/')
+OWL = Namespace('http://www.w3.org/2002/07/owl#')
 
 prefix_mapping = {
     XSD.string: 'String',
@@ -201,6 +201,8 @@ def generate_methods(g, label, class_type, operations, paths, type_label, f, no_
         else:
             expects = replace_prefix(prefix_mapping, g.objects(so, HYDRA.expects))
         returns = replace_prefix(prefix_mapping, g.objects(so, HYDRA.returns))
+        if sufix == None:
+            sufix = ''
         returns = [ r+sufix if r == label else r for r in returns ]
         generate_method(label, class_type, method_name, expects, returns, paths[i], type_label,
             f, no_annotations, delegate, g.value(so, HX.IdGenerator))
@@ -237,7 +239,7 @@ def generate_method(label, prop_type, method_name, expects, returns, path, type_
             annotations = annotations.format('POST', path, labelLower, 'Consumes', ig_str)
         f.write('\n{}    {}{} addTo{}({}){}\n'.format(annotations, access_level(type_label), 
             returns[0], label, args, sufix(type_label, returns[0], delegate, label)))
-    elif Literal('POST').eq(method_name) and prop_type == HYDRA.Resource:
+    elif Literal('POST').eq(method_name) and prop_type == prefix_mapping[HYDRA.Resource]:
         if not no_annotations:
             annotations = annotations.format('POST', path, labelLower, 'Produces', ig_str)
         f.write('\n{}    {}{} {}({}){}\n'.format(annotations, access_level(type_label), 
