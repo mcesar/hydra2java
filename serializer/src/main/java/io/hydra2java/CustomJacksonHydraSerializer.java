@@ -39,17 +39,22 @@ public class CustomJacksonHydraSerializer extends JacksonHydraSerializer {
     public void setUriInfo(UriInfo uriInfo) {
         this.uriInfo = uriInfo;
     }
-    
-    protected void serializeFields(Object bean, JsonGenerator jgen, SerializerProvider provider) 
+
+    public void serialize(Object bean, JsonGenerator jgen, SerializerProvider provider) 
         throws IOException {
-        UriBuilder ub = uriInfo.getRequestUriBuilder();
+        super.serialize(bean, jgen, provider);        
+    }
+
+    protected void serializeFields(Object bean, JsonGenerator jgen, SerializerProvider provider)
+        throws IOException {
         final Resource resource = getAnnotation(bean.getClass(), Resource.class);
+        UriBuilder ub = uriInfo.getRequestUriBuilder();
         if (resource != null) {
             for (Method m : resource.value().getMethods()) {
                 Property p = m.getAnnotation(Property.class);
                 if (p != null && m.getAnnotation(Path.class) != null) {
                     ub = uriInfo.getRequestUriBuilder();
-                    if (m.getAnnotation(Id.class) != null && 
+                    if (m.getAnnotation(Id.class) != null &&
                             m.getReturnType().equals(bean.getClass())) {
                         jgen.writeStringField(p.value(), ub.build().toString());
                     } else {
@@ -63,7 +68,7 @@ public class CustomJacksonHydraSerializer extends JacksonHydraSerializer {
                     } else {
                         Object idValue = "";
                         for (Method mb : bean.getClass().getMethods()) {
-                            if (mb.getAnnotation(Id.class) != null && 
+                            if (mb.getAnnotation(Id.class) != null &&
                                     !bean.getClass().equals(mb.getReturnType())) {
                                 try {
                                     idValue = mb.invoke(bean);
@@ -78,10 +83,16 @@ public class CustomJacksonHydraSerializer extends JacksonHydraSerializer {
                         if (m.getAnnotation(Path.class) != null) {
                             path = ub.path(m);
                         }
-                        jgen.writeStringField(JsonLdKeywords.AT_ID, 
+                        jgen.writeStringField(JsonLdKeywords.AT_ID,
                             path.path(idValue.toString()).build().toString());
-                        }
+                    }
                 }
+            }
+        } else {
+            final Id id = getAnnotation(bean.getClass(), Id.class);
+            if (id != null) {
+                UriBuilder path = ub;
+                jgen.writeStringField(JsonLdKeywords.AT_ID, path.build().toString());
             }
         }
         super.serializeFields(bean, jgen, provider);

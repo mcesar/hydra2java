@@ -16,6 +16,7 @@ import javax.ws.rs.ext.MessageBodyWriter;
 import javax.ws.rs.ext.Provider;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
 
 @Provider
 @Produces("application/ld+json")
@@ -46,6 +47,7 @@ public class JsonLdProvider implements MessageBodyWriter<Object> {
             OutputStream entityStream) throws IOException, WebApplicationException {
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JacksonHydraModule(uriInfo));
+        mapper.setSerializationInclusion(Include.NON_NULL);
         mapper.writeValue(entityStream, object);
     }
 }

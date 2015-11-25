@@ -22,7 +22,7 @@ prefix_mapping = {
     XSD.dateTime: 'java.util.Date',
     XSD.decimal: 'java.math.BigDecimal',
     XSD.int: 'Integer',
-    HYDRA.Collection: 'java.util.Collection',
+    HYDRA.Collection: 'io.hydra2java.Collection',
     HYDRA.Resource: 'java.net.URI',
     OWL.Nothing: 'void'
 }
@@ -37,6 +37,7 @@ def main():
     parser.add_argument("-m", "--members", default="all")
     parser.add_argument("-l", "--delegate", action="store_true", default=False)
     parser.add_argument("-s", "--supplemental_annotations", default="")
+    parser.add_argument("-c", "--collection_implementation", default="")
     args = parser.parse_args()
     g = Graph().parse(sys.stdin, format=args.format)
     api = g.value(None, RDF.type, HYDRA.ApiDocumentation)
@@ -53,6 +54,8 @@ def main():
     if args.supplemental_annotations:
         supplemental_annotations = args.supplemental_annotations.split(',')
     f = sys.stdout
+    if args.collection_implementation != '':
+        prefix_mapping[HYDRA.Collection] = args.collection_implementation
     for c in objects:
         if api and not c.startswith(api):
             continue
@@ -140,15 +143,15 @@ def generate_class(g, c, package, type_label, f, no_annotations, vocab,
             if members in ("methods", "all"):
                 operations = list(g.objects(p, HYDRA.supportedOperation))
                 generate_methods(g, plabel, prop_type, operations,
-                    [ plabel + '/' + str(o) for o in operations ], type_label, f, 
-                    no_annotations, ptype, delegate, None)
+                    [ plabel + '/' + str(o) for o in operations ], type_label, f,
+                    no_annotations, ptype, delegate, None, vocab)
         elif members in ("properties", "all"):
                 generate_property(plabel, prop_type, read_only, write_only, type_label, f)
     if members in ("methods", "all"):
         operations = list(g.objects(c, HYDRA.supportedOperation))
         generate_methods(g, class_label(c), None,
-                operations, [ str(o) for o in operations ], type_label, f, 
-                no_annotations, HYDRA.Link, delegate, sufix)
+                operations, [ str(o) for o in operations ], type_label, f,
+                no_annotations, HYDRA.Link, delegate, sufix, vocab)
     f.write('}\n')
 
 def camelCase(s):
@@ -188,8 +191,8 @@ def generate_property(label, prop_type, read_only, write_only, type_label, f):
         f.write('\n    {}void set{}({} {}){}\n'.format(access_level(type_label), label, prop_type,
             label[0].lower() + label[1:len(label)], sufix(type_label, 'void', False)))
 
-def generate_methods(g, label, class_type, operations, paths, type_label, f, no_annotations, 
-        ptype, delegate, sufix):
+def generate_methods(g, label, class_type, operations, paths, type_label, f, no_annotations,
+        ptype, delegate, sufix, vocab):
     no_operations = True
     for i, so in enumerate(operations):
         method_name = g.value(so, HYDRA.method)
@@ -205,12 +208,12 @@ def generate_methods(g, label, class_type, operations, paths, type_label, f, no_
             sufix = ''
         returns = [ r+sufix if r == label else r for r in returns ]
         generate_method(label, class_type, method_name, expects, returns, paths[i], type_label,
-            f, no_annotations, delegate, g.value(so, HX.IdGenerator))
+            f, no_annotations, delegate, g.value(so, HX.IdGenerator), vocab)
         no_operations = False
     return no_operations
 
 def generate_method(label, prop_type, method_name, expects, returns, path, type_label,
-        f, no_annotations, delegate, id_generator):
+        f, no_annotations, delegate, id_generator, vocab):
     l = lambda x: list(list(x.rpartition('.')).pop().partition('<')[0].rpartition(' ')).pop()
     args = ', '.join([ e + ' '+ l(e)[0].lower() + l(e)[1:] for e in expects ])
     labelLower = label[0].lower() + label[1:]
@@ -220,7 +223,17 @@ def generate_method(label, prop_type, method_name, expects, returns, path, type_
         ig_str = ''
     annotations = ''
     if not no_annotations:
-        annotations = '    @{}\n    @Path("{}")\n    @Property("{}")\n    @{}("application/ld+json"){}\n'
+        annotations = \
+            '    @{}\n    @Path("{}")\n    @Property("{}")\n    @{}("application/ld+json"){}\n'
+    if returns[0] == 'io.hydra2java.Collection' and type_label == 'class':
+        f.write('\n    @Vocab("%s")\n' % vocab)
+        f.write('    @Expose("Collection")\n')
+        f.write('    @Id\n')
+        f.write('    private static class %s implements io.hydra2java.Collection {\n' % prop_label(path))
+        f.write('        public java.util.Collection<String> getMembers() { return null; }\n')
+        f.write('        public String getTemplate() { return null; }\n')
+        f.write('        public java.util.Map<String, String> getMapping() { return null; }\n')
+        f.write('    }\n')
     if Literal('GET').eq(method_name):
         if not no_annotations:
             annotations = annotations.format('GET', path, labelLower, 'Produces', ig_str)
@@ -232,29 +245,31 @@ def generate_method(label, prop_type, method_name, expects, returns, path, type_
     elif Literal('PUT').eq(method_name):
         if not no_annotations:
             annotations = annotations.format('PUT', path, labelLower, 'Consumes', ig_str)
-        f.write('\n{}    {}{} set{}({}){}\n'.format(annotations, access_level(type_label), 
+        f.write('\n{}    {}{} set{}({}){}\n'.format(annotations, access_level(type_label),
             returns[0], label, args, sufix(type_label, returns[0], delegate, label)))
     elif Literal('POST').eq(method_name) and prop_type == prefix_mapping[HYDRA.Collection]:
         if not no_annotations:
             annotations = annotations.format('POST', path, labelLower, 'Consumes', ig_str)
-        f.write('\n{}    {}{} addTo{}({}){}\n'.format(annotations, access_level(type_label), 
+        f.write('\n{}    {}{} addTo{}({}){}\n'.format(annotations, access_level(type_label),
             returns[0], label, args, sufix(type_label, returns[0], delegate, label)))
     elif Literal('POST').eq(method_name) and prop_type == prefix_mapping[HYDRA.Resource]:
         if not no_annotations:
             annotations = annotations.format('POST', path, labelLower, 'Produces', ig_str)
-        f.write('\n{}    {}{} {}({}){}\n'.format(annotations, access_level(type_label), 
+        f.write('\n{}    {}{} {}({}){}\n'.format(annotations, access_level(type_label),
             returns[0], label, args, sufix(type_label, returns[0], delegate, label)))
     elif Literal('DELETE').eq(method_name):
         if not no_annotations:
             annotations = annotations.format('DELETE', path, labelLower, 'Produces', ig_str)
-        f.write('\n{}    {}{} remove{}({}){}\n'.format(annotations, access_level(type_label), 
+        f.write('\n{}    {}{} remove{}({}){}\n'.format(annotations, access_level(type_label),
             returns[0], label, args, sufix(type_label, returns[0], delegate, label)))
     else:
         raise Exception('Operation not supported:', label, prop_type, expects, returns, method_name)
 
 def sufix(type_label, returns, delegate, method_name='', expects=None):
     if type_label == 'class':
-        if returns == 'void':
+        if returns == 'io.hydra2java.Collection':
+            return ' { return new %s(); }' % (method_name[0].upper() + method_name[1:])
+        elif returns == 'void':
             if delegate:
                 return ' {{\n        delegate.{}();\n    }}'.format(method_name)
             else:
@@ -264,7 +279,8 @@ def sufix(type_label, returns, delegate, method_name='', expects=None):
                 delegate_arg = ''
                 if expects != None and '@Context UriInfo' in expects:
                     delegate_arg = 'uriInfo.getQueryParameters()'
-                return ' {{\n        return delegate.{}({});\n    }}'.format(method_name, delegate_arg)
+                return ' {{\n        return delegate.{}({});\n    }}'.\
+                    format(method_name, delegate_arg)
             else:
                 if returns == 'boolean':
                     return ' { return false; }'
