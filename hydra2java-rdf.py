@@ -22,7 +22,7 @@ prefix_mapping = {
     XSD.dateTime: 'java.util.Date',
     XSD.decimal: 'java.math.BigDecimal',
     XSD.int: 'Integer',
-    HYDRA.Collection: 'io.hydra2java.Collection',
+    HYDRA.Collection: 'java.util.Collection',
     HYDRA.Resource: 'java.net.URI',
     OWL.Nothing: 'void'
 }
@@ -144,14 +144,14 @@ def generate_class(g, c, package, type_label, f, no_annotations, vocab,
                 operations = list(g.objects(p, HYDRA.supportedOperation))
                 generate_methods(g, plabel, prop_type, operations,
                     [ plabel + '/' + str(o) for o in operations ], type_label, f,
-                    no_annotations, ptype, delegate, None, vocab)
+                    no_annotations, ptype, delegate, None, vocab, class_label(c), members)
         elif members in ("properties", "all"):
                 generate_property(plabel, prop_type, read_only, write_only, type_label, f)
     if members in ("methods", "all"):
         operations = list(g.objects(c, HYDRA.supportedOperation))
         generate_methods(g, class_label(c), None,
                 operations, [ str(o) for o in operations ], type_label, f,
-                no_annotations, HYDRA.Link, delegate, sufix, vocab)
+                no_annotations, HYDRA.Link, delegate, sufix, vocab, class_label(c), members)
     f.write('}\n')
 
 def camelCase(s):
@@ -192,7 +192,7 @@ def generate_property(label, prop_type, read_only, write_only, type_label, f):
             label[0].lower() + label[1:len(label)], sufix(type_label, 'void', False)))
 
 def generate_methods(g, label, class_type, operations, paths, type_label, f, no_annotations,
-        ptype, delegate, sufix, vocab):
+        ptype, delegate, sufix, vocab, class_label, members):
     no_operations = True
     for i, so in enumerate(operations):
         method_name = g.value(so, HYDRA.method)
@@ -208,12 +208,12 @@ def generate_methods(g, label, class_type, operations, paths, type_label, f, no_
             sufix = ''
         returns = [ r+sufix if r == label else r for r in returns ]
         generate_method(label, class_type, method_name, expects, returns, paths[i], type_label,
-            f, no_annotations, delegate, g.value(so, HX.IdGenerator), vocab)
+            f, no_annotations, delegate, g.value(so, HX.IdGenerator), vocab, class_label, members)
         no_operations = False
     return no_operations
 
 def generate_method(label, prop_type, method_name, expects, returns, path, type_label,
-        f, no_annotations, delegate, id_generator, vocab):
+        f, no_annotations, delegate, id_generator, vocab, class_label, members):
     l = lambda x: list(list(x.rpartition('.')).pop().partition('<')[0].rpartition(' ')).pop()
     args = ', '.join([ e + ' '+ l(e)[0].lower() + l(e)[1:] for e in expects ])
     labelLower = label[0].lower() + label[1:]
@@ -225,14 +225,32 @@ def generate_method(label, prop_type, method_name, expects, returns, path, type_
     if not no_annotations:
         annotations = \
             '    @{}\n    @Path("{}")\n    @Property("{}")\n    @{}("application/ld+json"){}\n'
-    if returns[0] == 'io.hydra2java.Collection' and type_label == 'class':
-        f.write('\n    @Vocab("%s")\n' % vocab)
-        f.write('    @Expose("Collection")\n')
-        f.write('    @Id\n')
-        f.write('    private static class %s implements io.hydra2java.Collection {\n' % prop_label(path))
-        f.write('        public java.util.Collection<String> getMembers() { return null; }\n')
-        f.write('        public String getTemplate() { return null; }\n')
-        f.write('        public java.util.Map<String, String> getMapping() { return null; }\n')
+    if returns[0] == 'io.hydra2java.Collection':
+        if not no_annotations:
+            f.write('\n    @Vocab("%s")\n' % vocab)
+            f.write('    @Expose("Collection")\n')
+            f.write('    @Id')
+        if type_label == 'class':
+            collection_keyword = 'implements'
+            if delegate and type_label == 'class' and members == 'methods':
+                collection_methods = [' { return delegate.getMembers(); }', 
+                        ' { return delegate.getTemplate(); }', 
+                        ' { return delegate.getMapping(); }']
+            else:
+                collection_methods = [' { return null; }', ' { return null; }', ' { return null; }']
+            collection_modifiers = 'private static'
+        else:
+            collection_keyword = 'extends'
+            collection_methods = [';', ';', ';']
+            collection_modifiers = 'public'
+        f.write('\n    %s %s %s %s io.hydra2java.Collection {\n' % \
+                (collection_modifiers, type_label, prop_label(path), collection_keyword))
+        if delegate and type_label == 'class' and members == 'methods':
+            f.write('        @javax.inject.Inject\n        private {} delegate;\n'.
+                    format(class_label + 'Resource.' + prop_label(path)))
+        f.write('        public java.util.Collection<String> getMembers()%s\n' % collection_methods[0])
+        f.write('        public String getTemplate()%s\n' % collection_methods[1])
+        f.write('        public java.util.Map<String, String> getMapping()%s\n' % collection_methods[2])
         f.write('    }\n')
     if Literal('GET').eq(method_name):
         if not no_annotations:
